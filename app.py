@@ -379,12 +379,20 @@ def torznab_api(indexer_name: str):
             item_guid = ET.SubElement(item, 'guid', isPermaLink='false')
             item_guid.text = result.guid
             
-            item_link = ET.SubElement(item, 'link')
             # Make link absolute if relative
             if result.link.startswith('http'):
-                item_link.text = result.link
+                download_url = result.link
             else:
-                item_link.text = request.host_url.rstrip('/') + result.link
+                download_url = request.host_url.rstrip('/') + result.link
+            
+            item_link = ET.SubElement(item, 'link')
+            item_link.text = download_url
+            
+            # Add enclosure for torrent file (required by some clients)
+            enclosure = ET.SubElement(item, 'enclosure')
+            enclosure.set('url', download_url)
+            enclosure.set('length', str(result.size if result.size else 0))
+            enclosure.set('type', 'application/x-bittorrent')
             
             item_details = ET.SubElement(item, 'comments')
             item_details.text = result.details_url
