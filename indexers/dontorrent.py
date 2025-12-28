@@ -101,8 +101,11 @@ class DonTorrentIndexer(BaseIndexer):
                 else:
                     continue
                 
-                # Add quality to title if exists
-                full_title = f"{title} [{quality}]" if quality else title
+                # Add quality to title if exists and append SPANiSH for language detection
+                if quality:
+                    full_title = f"{title} [{quality}] SPANiSH"
+                else:
+                    full_title = f"{title} SPANiSH"
                 
                 # Determine table based on content type
                 tabla = 'peliculas'
@@ -578,17 +581,19 @@ class DonTorrentIndexer(BaseIndexer):
                 series_name_normalized = titlecase(series_name)
                 
                 if is_pack:
-                    # Complete pack: "Serie - Temporada X Completa [Calidad]"
+                    # Complete pack: "Serie - Temporada X Completa [Calidad] SPANiSH"
                     title_parts = [series_name_normalized, f"- Temporada {ep_season} Completa"]
                     if quality:
                         title_parts.append(f"[{quality}]")
+                    title_parts.append("SPANiSH")
                     episode_title = " ".join(title_parts)
                 else:
-                    # Individual episode: "Serie SXXEXX [Calidad/Formato]"
+                    # Individual episode: "Serie SXXEXX [Calidad/Formato] SPANiSH"
                     title_parts = [series_name_normalized]
                     title_parts.append(f"S{ep_season:02d}E{ep_number:02d}")
                     if quality:
                         title_parts.append(f"[{quality}]")
+                    title_parts.append("SPANiSH")
                     episode_title = " ".join(title_parts)
                 
                 # Create download link
