@@ -389,6 +389,15 @@ def torznab_api(indexer_name: str):
             item_details = ET.SubElement(item, 'comments')
             item_details.text = result.details_url
             
+            # pubDate is REQUIRED by RSS 2.0
+            item_pubdate = ET.SubElement(item, 'pubDate')
+            if result.publish_date:
+                item_pubdate.text = result.publish_date.strftime('%a, %d %b %Y %H:%M:%S +0000')
+            else:
+                # Use current time if not available
+                from datetime import datetime
+                item_pubdate.text = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
+            
             # Torznab attributes
             if result.size:
                 size_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
