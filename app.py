@@ -337,10 +337,16 @@ def torznab_api(indexer_name: str):
         total_results = len(results)
         results = results[offset:offset + limit]
         
-        # Build Torznab XML RSS response
-        rss = ET.Element('rss', version='2.0')
-        rss.set('xmlns:torznab', 'http://torznab.com/schemas/2015/feed')
-        rss.set('xmlns:atom', 'http://www.w3.org/2005/Atom')
+        # Build Torznab XML RSS response with namespaces
+        TORZNAB_NS = 'http://torznab.com/schemas/2015/feed'
+        ATOM_NS = 'http://www.w3.org/2005/Atom'
+        
+        nsmap = {
+            'torznab': TORZNAB_NS,
+            'atom': ATOM_NS
+        }
+        
+        rss = ET.Element('rss', nsmap=nsmap, version='2.0')
         
         channel = ET.SubElement(rss, 'channel')
         
@@ -354,7 +360,7 @@ def torznab_api(indexer_name: str):
         link.text = request.host_url
         
         # Torznab response element with pagination info
-        response_elem = ET.SubElement(channel, 'torznab:response')
+        response_elem = ET.SubElement(channel, f'{{{TORZNAB_NS}}}response')
         response_elem.set('offset', str(offset))
         response_elem.set('total', str(total_results))
         
@@ -380,7 +386,7 @@ def torznab_api(indexer_name: str):
             
             # Torznab attributes
             if result.size:
-                size_attr = ET.SubElement(item, 'torznab:attr')
+                size_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 size_attr.set('name', 'size')
                 size_attr.set('value', str(result.size))
             
@@ -396,28 +402,28 @@ def torznab_api(indexer_name: str):
                 }
                 cat_ids = category_map.get(result.category, [8000])
                 for cat_id in cat_ids:
-                    cat_attr = ET.SubElement(item, 'torznab:attr')
+                    cat_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                     cat_attr.set('name', 'category')
                     cat_attr.set('value', str(cat_id))
             
             if result.seeders is not None:
-                seeders_attr = ET.SubElement(item, 'torznab:attr')
+                seeders_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 seeders_attr.set('name', 'seeders')
                 seeders_attr.set('value', str(result.seeders))
             
             if result.leechers is not None:
-                peers_attr = ET.SubElement(item, 'torznab:attr')
+                peers_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 peers_attr.set('name', 'peers')
                 peers_attr.set('value', str(result.leechers))
             
             # TV specific attributes
             if hasattr(result, 'season') and result.season is not None:
-                season_attr = ET.SubElement(item, 'torznab:attr')
+                season_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 season_attr.set('name', 'season')
                 season_attr.set('value', str(result.season))
             
             if hasattr(result, 'episode') and result.episode is not None:
-                ep_attr = ET.SubElement(item, 'torznab:attr')
+                ep_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 ep_attr.set('name', 'episode')
                 ep_attr.set('value', str(result.episode))
         
