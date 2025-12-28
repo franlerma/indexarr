@@ -589,8 +589,8 @@ class DonTorrentIndexer(BaseIndexer):
                     details_url=series_url,
                     indexer=self.name,
                     category="Series",
-                    season=season_num if season_num else page_season,
-                    episode=episode_num if episode_num else None
+                    season=ep_season,
+                    episode=ep_number if not is_pack else None
                 )
                 
                 print(f"[TVSearch] Episode found: {episode_title} (content_id={content_id})")
