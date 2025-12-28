@@ -320,6 +320,11 @@ def torznab_api(indexer_name: str):
         limit = request.args.get('limit', type=int, default=100)
         offset = request.args.get('offset', type=int, default=0)
         
+        # If no query provided, use a generic search term to get recent results
+        if not query:
+            # For test/capability checks, return recent popular content
+            query = 'the'  # Generic search that will return some results
+        
         # Perform search based on type
         if t == 'tvsearch' and hasattr(indexer, 'search_episodes'):
             try:
