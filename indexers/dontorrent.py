@@ -472,13 +472,13 @@ class DonTorrentIndexer(BaseIndexer):
             page_season = int(season_match.group(1)) if season_match else None
             
             # Get format/quality from page (HDTV-720p, BluRay-1080p, etc)
-            # Find paragraph containing "Format:" (can be in a <b> inside the <p>)
+            # Find paragraph containing "Formato:" (can be in a <b> inside the <p>)
             quality = None
             all_paragraphs = soup.find_all('p')
             for p in all_paragraphs:
                 p_text = p.get_text(strip=True)
-                if 'Format:' in p_text:
-                    formato_match = re.search(r'Format:\s*(.+?)(?:\s|$)', p_text)
+                if 'Formato:' in p_text:
+                    formato_match = re.search(r'Formato:\s*(.+?)(?:\s|$)', p_text)
                     if formato_match:
                         quality = formato_match.group(1).strip()
                     break
