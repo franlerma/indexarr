@@ -1,0 +1,221 @@
+"""
+Ejemplo de cómo crear un nuevo indexer
+
+Para usar este ejemplo:
+1. Copia este archivo y renómbralo (ej: mejortorrent.py)
+2. Implementa los métodos search() y test_connection()
+3. Agrega el indexer a indexers/__init__.py
+4. Registra la clase en app.py en INDEXER_CLASSES
+5. Configura en config.yaml
+"""
+from typing import List
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+from .base import BaseIndexer
+from models import TorrentResult
+
+
+class EjemploIndexer(BaseIndexer):
+    """Plantilla para crear un nuevo indexer"""
+    
+    @property
+    def name(self) -> str:
+        """Retorna el nombre del indexer"""
+        return "EjemploIndexer"
+    
+    def __init__(self, config: dict):
+        """
+        Inicializa el indexer
+        
+        Args:
+            config: Configuración del indexer desde config.yaml
+        """
+        super().__init__(config)
+        
+        # Crear sesión HTTP
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        })
+        
+        # Puedes obtener configuración adicional del config
+        # self.api_key = config.get('api_key')
+    
+    def search(self, query: str) -> List[TorrentResult]:
+        """
+        Busca torrents por query
+        
+        Args:
+            query: Término de búsqueda
+            
+        Returns:
+            Lista de TorrentResult
+        """
+        results = []
+        
+        try:
+            # Ejemplo 1: Búsqueda por URL directa
+            search_url = urljoin(self.domain, f'/buscar?q={query}')
+            
+            response = self.session.get(search_url, timeout=self.timeout)
+            response.raise_for_status()
+            
+            # Parsear HTML
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Ejemplo: buscar resultados (adapta los selectores a tu sitio)
+            result_items = soup.select('.resultado-item')  # Cambia este selector
+            
+            for item in result_items:
+                # Extraer datos (adapta según la estructura del sitio)
+                title_elem = item.select_one('.titulo')
+                if not title_elem:
+                    continue
+                
+                title = title_elem.get_text(strip=True)
+                
+                # Enlace de descarga
+                download_link = item.select_one('a.download')
+                if not download_link:
+                    continue
+                
+                download_url = download_link.get('href')
+                if not download_url.startswith('http'):
+                    download_url = urljoin(self.domain, download_url)
+                
+                # URL de detalles
+                details_link = item.select_one('a.details')
+                details_url = details_link.get('href') if details_link else download_url
+                if not details_url.startswith('http'):
+                    details_url = urljoin(self.domain, details_url)
+                
+                # Extraer ID único (puedes usar el href o cualquier identificador)
+                torrent_id = download_url.split('/')[-1].replace('.torrent', '')
+                
+                # Datos opcionales
+                size_elem = item.select_one('.size')
+                size_text = size_elem.get_text(strip=True) if size_elem else None
+                size_bytes = self._parse_size(size_text) if size_text else None
+                
+                seeders_elem = item.select_one('.seeders')
+                seeders = int(seeders_elem.get_text(strip=True)) if seeders_elem else None
+                
+                # Crear resultado
+                result = TorrentResult(
+                    title=title,
+                    guid=f"{self.name.lower()}-{torrent_id}",
+                    link=download_url,
+                    details_url=details_url,
+                    indexer=self.name,
+                    size=size_bytes,
+                    seeders=seeders,
+                )
+                
+                results.append(result)
+        
+        except Exception as e:
+            print(f"Error buscando en {self.name}: {e}")
+        
+        return results
+    
+    def test_connection(self) -> bool:
+        """
+        Prueba la conexión al indexer
+        
+        Returns:
+            True si la conexión es exitosa
+        """
+        try:
+            response = self.session.get(self.domain, timeout=10)
+            return response.status_code == 200
+        except:
+            return False
+    
+    def _parse_size(self, size_text: str) -> int:
+        """
+        Convierte texto de tamaño a bytes
+        
+        Args:
+            size_text: Texto como "1.5 GB", "750 MB", etc.
+            
+        Returns:
+            Tamaño en bytes
+        """
+        # Implementación básica
+        size_text = size_text.upper().strip()
+        
+        multipliers = {
+            'KB': 1024,
+            'MB': 1024 ** 2,
+            'GB': 1024 ** 3,
+            'TB': 1024 ** 4,
+        }
+        
+        for unit, multiplier in multipliers.items():
+            if unit in size_text:
+                try:
+                    value = float(size_text.replace(unit, '').strip())
+                    return int(value * multiplier)
+                except ValueError:
+                    pass
+        
+        return 0
+
+
+# Ejemplo 2: Indexer con API JSON
+class EjemploIndexerAPI(BaseIndexer):
+    """Ejemplo de indexer que usa una API JSON"""
+    
+    @property
+    def name(self) -> str:
+        return "EjemploAPI"
+    
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.api_key = config.get('api_key')
+        self.session = requests.Session()
+    
+    def search(self, query: str) -> List[TorrentResult]:
+        results = []
+        
+        try:
+            # Hacer request a API
+            url = urljoin(self.domain, '/api/search')
+            params = {
+                'q': query,
+                'apikey': self.api_key,
+            }
+            
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Parsear respuesta JSON
+            for item in data.get('results', []):
+                result = TorrentResult(
+                    title=item['title'],
+                    guid=f"{self.name.lower()}-{item['id']}",
+                    link=item['download_url'],
+                    details_url=item['info_url'],
+                    indexer=self.name,
+                    size=item.get('size'),
+                    seeders=item.get('seeders'),
+                    leechers=item.get('leechers'),
+                )
+                results.append(result)
+        
+        except Exception as e:
+            print(f"Error en {self.name}: {e}")
+        
+        return results
+    
+    def test_connection(self) -> bool:
+        try:
+            url = urljoin(self.domain, '/api/status')
+            response = self.session.get(url, timeout=10)
+            return response.status_code == 200
+        except:
+            return False
