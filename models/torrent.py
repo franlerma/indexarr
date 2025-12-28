@@ -21,6 +21,10 @@ class TorrentResult:
     category: Optional[str] = None
     imdb_id: Optional[str] = None
     
+    # TV specific fields
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    
     def to_jackett_format(self) -> dict:
         """Convert result to Jackett/Torznab JSON format"""
         result = {

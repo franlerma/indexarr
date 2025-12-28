@@ -2,8 +2,9 @@
 """
 Indexerr - Jackett-compatible API for multiple torrent indexers
 """
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from typing import List, Dict, Any
+from lxml import etree as ET
 
 from utils import load_config, get_enabled_indexers
 from indexers import DonTorrentIndexer
@@ -273,43 +274,163 @@ def torznab_api(indexer_name: str):
             'available_indexers': list(indexers.keys())
         }), 404
     
-    # Handle caps request
+    # Handle caps request - return XML for Torznab compatibility
     if t == 'caps':
-        return jsonify({
-            'caps': {
-                'server': {
-                    'title': 'Indexarr',
-                    'version': '1.0'
-                },
-                'searching': {
-                    'search': {'available': 'yes', 'supportedParams': 'q'},
-                    'tv-search': {'available': 'yes', 'supportedParams': 'q,season,ep'},
-                    'movie-search': {'available': 'yes', 'supportedParams': 'q'}
-                },
-                'categories': {
-                    'category': [
-                        {'id': '2000', 'name': 'Movies'},
-                        {'id': '5000', 'name': 'TV'}
-                    ]
+        caps = ET.Element('caps')
+        
+        server = ET.SubElement(caps, 'server')
+        server.set('title', 'Indexarr')
+        server.set('version', '1.0')
+        
+        searching = ET.SubElement(caps, 'searching')
+        
+        search = ET.SubElement(searching, 'search')
+        search.set('available', 'yes')
+        search.set('supportedParams', 'q')
+        
+        tv_search = ET.SubElement(searching, 'tv-search')
+        tv_search.set('available', 'yes')
+        tv_search.set('supportedParams', 'q,season,ep')
+        
+        movie_search = ET.SubElement(searching, 'movie-search')
+        movie_search.set('available', 'yes')
+        movie_search.set('supportedParams', 'q')
+        
+        categories = ET.SubElement(caps, 'categories')
+        
+        cat_movies = ET.SubElement(categories, 'category')
+        cat_movies.set('id', '2000')
+        cat_movies.set('name', 'Movies')
+        
+        cat_tv = ET.SubElement(categories, 'category')
+        cat_tv.set('id', '5000')
+        cat_tv.set('name', 'TV')
+        
+        xml_string = ET.tostring(caps, encoding='utf-8', xml_declaration=True, pretty_print=True)
+        return Response(xml_string, mimetype='application/xml')
+    
+    # Handle search request - return XML RSS
+    elif t == 'search' or t == 'tvsearch':
+        indexer = indexers[indexer_name]
+        
+        # Get query parameters
+        query = request.args.get('q', '')
+        season = request.args.get('season')
+        ep = request.args.get('ep')
+        limit = request.args.get('limit', type=int, default=100)
+        offset = request.args.get('offset', type=int, default=0)
+        
+        # Perform search based on type
+        if t == 'tvsearch' and hasattr(indexer, 'search_episodes'):
+            try:
+                season_int = int(season) if season else None
+                ep_int = int(ep) if ep else None
+            except (ValueError, TypeError):
+                season_int = None
+                ep_int = None
+            
+            results = indexer.search_episodes(query, season_int, ep_int)
+        else:
+            results = indexer.search(query)
+        
+        # Apply pagination
+        total_results = len(results)
+        results = results[offset:offset + limit]
+        
+        # Build Torznab XML RSS response
+        rss = ET.Element('rss', version='2.0')
+        rss.set('xmlns:torznab', 'http://torznab.com/schemas/2015/feed')
+        rss.set('xmlns:atom', 'http://www.w3.org/2005/Atom')
+        
+        channel = ET.SubElement(rss, 'channel')
+        
+        title = ET.SubElement(channel, 'title')
+        title.text = f'Indexarr - {indexer_name}'
+        
+        description = ET.SubElement(channel, 'description')
+        description.text = f'Search results for {query}' if query else 'Search results'
+        
+        link = ET.SubElement(channel, 'link')
+        link.text = request.host_url
+        
+        # Torznab response element with pagination info
+        response_elem = ET.SubElement(channel, 'torznab:response')
+        response_elem.set('offset', str(offset))
+        response_elem.set('total', str(total_results))
+        
+        # Add items
+        for result in results:
+            item = ET.SubElement(channel, 'item')
+            
+            item_title = ET.SubElement(item, 'title')
+            item_title.text = result.title
+            
+            item_guid = ET.SubElement(item, 'guid', isPermaLink='false')
+            item_guid.text = result.guid
+            
+            item_link = ET.SubElement(item, 'link')
+            # Make link absolute if relative
+            if result.link.startswith('http'):
+                item_link.text = result.link
+            else:
+                item_link.text = request.host_url.rstrip('/') + result.link
+            
+            item_details = ET.SubElement(item, 'comments')
+            item_details.text = result.details_url
+            
+            # Torznab attributes
+            if result.size:
+                size_attr = ET.SubElement(item, 'torznab:attr')
+                size_attr.set('name', 'size')
+                size_attr.set('value', str(result.size))
+            
+            # Category as torznab attributes
+            if result.category:
+                # Map Spanish categories to Torznab IDs
+                category_map = {
+                    'Películas': [2000],
+                    'Movies': [2000],
+                    'Series': [5000],
+                    'Documentales': [7000],
+                    'Documentaries': [7000]
                 }
-            }
-        })
-    
-    # Handle search request
-    elif t == 'search':
-        # Redirect to search endpoint
-        return search_indexer(indexer_name)
-    
-    # Handle tvsearch request
-    elif t == 'tvsearch':
-        # Redirect to tvsearch endpoint
-        return tvsearch_indexer(indexer_name)
+                cat_ids = category_map.get(result.category, [8000])
+                for cat_id in cat_ids:
+                    cat_attr = ET.SubElement(item, 'torznab:attr')
+                    cat_attr.set('name', 'category')
+                    cat_attr.set('value', str(cat_id))
+            
+            if result.seeders is not None:
+                seeders_attr = ET.SubElement(item, 'torznab:attr')
+                seeders_attr.set('name', 'seeders')
+                seeders_attr.set('value', str(result.seeders))
+            
+            if result.leechers is not None:
+                peers_attr = ET.SubElement(item, 'torznab:attr')
+                peers_attr.set('name', 'peers')
+                peers_attr.set('value', str(result.leechers))
+            
+            # TV specific attributes
+            if hasattr(result, 'season') and result.season is not None:
+                season_attr = ET.SubElement(item, 'torznab:attr')
+                season_attr.set('name', 'season')
+                season_attr.set('value', str(result.season))
+            
+            if hasattr(result, 'episode') and result.episode is not None:
+                ep_attr = ET.SubElement(item, 'torznab:attr')
+                ep_attr.set('name', 'episode')
+                ep_attr.set('value', str(result.episode))
+        
+        xml_string = ET.tostring(rss, encoding='utf-8', xml_declaration=True, pretty_print=True)
+        return Response(xml_string, mimetype='application/rss+xml')
     
     else:
-        return jsonify({
-            'error': f'Unknown request type: {t}',
-            'supported_types': ['caps', 'search', 'tvsearch']
-        }), 400
+        # Return error as XML
+        error = ET.Element('error')
+        error.set('code', '203')
+        error.set('description', f'Unknown request type: {t}')
+        xml_string = ET.tostring(error, encoding='utf-8', xml_declaration=True)
+        return Response(xml_string, mimetype='application/xml'), 400
 
 
 @app.route('/api/v1/indexers/<indexer_name>/results')
