@@ -44,7 +44,16 @@ class TorrentResult:
             result["PublishDate"] = self.publish_date.isoformat()
             
         if self.category:
-            result["Category"] = self.category
+            # Map Spanish categories to Torznab category IDs
+            category_map = {
+                'Películas': [2000],  # Movies
+                'Movies': [2000],
+                'Series': [5000],     # TV
+                'Documentales': [7000], # Other
+                'Documentaries': [7000]
+            }
+            result["Category"] = category_map.get(self.category, [8000])  # 8000 = Other
+            result["CategoryDesc"] = self.category
             
         if self.imdb_id:
             result["Imdb"] = self.imdb_id

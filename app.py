@@ -253,6 +253,65 @@ def tvsearch_indexer(indexer_name: str):
         }), 500
 
 
+@app.route('/api/v1/indexers/<indexer_name>/api')
+def torznab_api(indexer_name: str):
+    """
+    Torznab API endpoint (caps, search, tvsearch)
+    
+    Args:
+        indexer_name: Indexer name
+        
+    Query params:
+        t: Type of request (caps, search, tvsearch)
+    """
+    t = request.args.get('t', '').lower()
+    
+    # Verify indexer exists
+    if indexer_name not in indexers:
+        return jsonify({
+            'error': f'Indexer "{indexer_name}" not found or not enabled',
+            'available_indexers': list(indexers.keys())
+        }), 404
+    
+    # Handle caps request
+    if t == 'caps':
+        return jsonify({
+            'caps': {
+                'server': {
+                    'title': 'Indexarr',
+                    'version': '1.0'
+                },
+                'searching': {
+                    'search': {'available': 'yes', 'supportedParams': 'q'},
+                    'tv-search': {'available': 'yes', 'supportedParams': 'q,season,ep'},
+                    'movie-search': {'available': 'yes', 'supportedParams': 'q'}
+                },
+                'categories': {
+                    'category': [
+                        {'id': '2000', 'name': 'Movies'},
+                        {'id': '5000', 'name': 'TV'}
+                    ]
+                }
+            }
+        })
+    
+    # Handle search request
+    elif t == 'search':
+        # Redirect to search endpoint
+        return search_indexer(indexer_name)
+    
+    # Handle tvsearch request
+    elif t == 'tvsearch':
+        # Redirect to tvsearch endpoint
+        return tvsearch_indexer(indexer_name)
+    
+    else:
+        return jsonify({
+            'error': f'Unknown request type: {t}',
+            'supported_types': ['caps', 'search', 'tvsearch']
+        }), 400
+
+
 @app.route('/api/v1/indexers/<indexer_name>/results')
 def search_indexer(indexer_name: str):
     """
