@@ -1,43 +1,59 @@
-# Usar imagen base de Python Alpine (muy ligera)
+# Stage 1: Build dependencies
+FROM python:3.11-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libxml2-dev \
+    libxslt-dev
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime image
 FROM python:3.11-alpine
 
 # Metadata
 LABEL maintainer="Fran"
-LABEL description="Indexerr - API compatible con Jackett para indexers de torrents"
+LABEL description="Indexarr - Jackett-compatible API for torrent indexers"
 
-# Instalar dependencias del sistema necesarias para lxml
+# Install only runtime dependencies
 RUN apk add --no-cache \
-    libxml2-dev \
-    libxslt-dev \
-    gcc \
-    musl-dev \
+    libxml2 \
+    libxslt \
     && rm -rf /var/cache/apk/*
 
-# Crear directorio de trabajo
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Set PATH to use venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create working directory
 WORKDIR /app
 
-# Copiar requirements primero para aprovechar cache de Docker
-COPY requirements.txt .
-
-# Instalar dependencias Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copiar el resto del código
+# Copy application code
 COPY . .
 
-# Crear usuario no-root para seguridad
+# Create non-root user for security
 RUN addgroup -g 1000 indexerr && \
     adduser -D -u 1000 -G indexerr indexerr && \
     chown -R indexerr:indexerr /app
 
-# Cambiar a usuario no-root
+# Switch to non-root user
 USER indexerr
 
-# Exponer puerto
+# Expose port
 EXPOSE 15505
 
-# Variables de entorno
+# Environment variables
 ENV PYTHONUNBUFFERED=1
 
-# Comando de inicio
+# Start command
 CMD ["python3", "app.py"]
