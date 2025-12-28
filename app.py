@@ -407,6 +407,20 @@ def torznab_api(indexer_name: str):
                 item_pubdate.text = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
             
             # Torznab attributes
+            
+            # Language - DonTorrent is Spanish content
+            lang_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
+            lang_attr.set('name', 'language')
+            lang_attr.set('value', 'es')
+            
+            # Extract quality from title (e.g., "[HDTV-720p]" or "[BluRay-1080p]")
+            import re
+            quality_match = re.search(r'\[(.*?)\]', result.title)
+            if quality_match:
+                quality_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
+                quality_attr.set('name', 'quality')
+                quality_attr.set('value', quality_match.group(1))
+            
             if result.size:
                 size_attr = ET.SubElement(item, f'{{{TORZNAB_NS}}}attr')
                 size_attr.set('name', 'size')

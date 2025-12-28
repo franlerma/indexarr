@@ -562,6 +562,18 @@ class DonTorrentIndexer(BaseIndexer):
                 if not content_id:
                     continue
                 
+                # Third cell: date (format YYYY-MM-DD)
+                publish_date = None
+                if len(cells) >= 3:
+                    date_cell = cells[2]
+                    date_text = date_cell.get_text(strip=True)
+                    # Try to parse date in format YYYY-MM-DD
+                    try:
+                        from datetime import datetime
+                        publish_date = datetime.strptime(date_text, '%Y-%m-%d')
+                    except (ValueError, AttributeError):
+                        pass
+                
                 # Build title
                 series_name_normalized = titlecase(series_name)
                 
@@ -590,7 +602,8 @@ class DonTorrentIndexer(BaseIndexer):
                     indexer=self.name,
                     category="Series",
                     season=ep_season,
-                    episode=ep_number if not is_pack else None
+                    episode=ep_number if not is_pack else None,
+                    publish_date=publish_date
                 )
                 
                 print(f"[TVSearch] Episode found: {episode_title} (content_id={content_id})")
